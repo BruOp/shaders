@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Voxels liquid 2</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    
+  </head>
+  <body>
+    <div id="container"></div>
+  </body>
+
+  <script src="js/three.min.js"></script>
+  <script src="js/OrbitControls.js"></script>
+  <script src="js/main.js"></script>
+    <script type="x-shader/x-fragment" id="fragmentShader">
+    varying vec2 vUv;
+    varying float displacement;
+    uniform float time;
+
+    float random( vec3 scale, float seed ) {
+      return fract( sin( dot( gl_FragCoord.xyz + seed, scale ) ) * 43758.5453 + seed ) ;
+    }
+
+    void main() {
+      float norm_d = (0.5 + 0.5 * displacement );
+      // compose the colour using the UV coordinate
+      // and modulate it with the noise like ambient occlusion
+      vec3 color = vec3( 1.0 - norm_d, 0.5, norm_d);
+      gl_FragColor = vec4( color.rgb , 1.0 );
+
+    }
+  </script>
+
+  <script type="x-shader/x-vertex" id='vertexShader' > 
+    varying vec2 vUv;
+    varying float displacement;
+    uniform float time;
+    
+    float sinZ(vec3 position, float time) {
+      return sin(sqrt(position.x * position.x + position.y * position.y) + time);
+    }
+
+    void main() {
+
+        vUv = uv;
+
+        displacement = sinZ( position, 10.0 * time);
+        
+        // move the position along the normal and transform it
+        vec3 newPosition = position + normal * 2.0 * displacement;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( newPosition, 1.0 );
+
+    }
+  </script>
+
+</html>
