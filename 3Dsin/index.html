@@ -38,7 +38,7 @@
     uniform float time;
     
     float sinZ(vec3 position, float time) {
-      return sin(sqrt(position.x * position.x + position.y * position.y) + time);
+      return sin(sqrt(position.x * position.x + position.y * position.y) - time);
     }
 
     void main() {
