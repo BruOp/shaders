@@ -1,14 +1,21 @@
-var scene, orthoCamera, renderer, rtt, height_field;
+var scene, orthoCamera, camera, renderer, renderTargetTexture, height_field, mouse, rayCaster, intersect;
 
 var WIDTH = 500, HEIGHT = 500;
 window.onload = function() {
-    var shaderLoader = new ShaderLoader();
-    shaderLoader.loadShaders({
-      vertex : "simulation/vertex.glsl",
-      fragment : "simulation/fragment.glsl",
-    }, "./shaders/simulation/", start );
+  var shaderLoader = new ShaderLoader();
+  shaderLoader.loadShaders({
+    passthrough_vertex: "/passthrough/vertex",
+    passthrough_fragment: "/passthrough/fragment",
+    sim_vertex: "/simulation/vertex",
+    sim_fragment : "/simulation/fragment",
+  }, "./shaders", start );
 
   function start() {
+    
+    raycaster = new THREE.Raycaster();
+    intersect = new THREE.Vector2();
+    mouse = new THREE.Vector2();
+    
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(WIDTH, HEIGHT);
     document.body.appendChild(renderer.domElement);
@@ -20,33 +27,62 @@ window.onload = function() {
         throw new Error( "float textures not supported" );
     }
     
-    //3 rtt setup
     scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(60, WIDTH/HEIGHT, 1,10000 );
+    
+    rttScene  = new THREE.Scene();
     orthoCamera = new THREE.OrthographicCamera(-1,1,1,-1,1/Math.pow( 2, 53 ),1 );
+    
+    var [rtPositionOld, rtPositionCur, rtPositionNew] = getRenderTargets();
+    
+    var simulationShader = new THREE.ShaderMaterial({
+      uniforms: {
+        position_old: { type: 't', value: rtPositionOld },
+        position_cur: { type: 't', value: rtPositionCur },
+        position_new: { type: 't', value: rtPositionNew },
+        mouse: { type: "v2", value: intersect }
+      },
+      vertexShader: ShaderLoader.get("sim_vertex"),
+      fragmentShader:  ShaderLoader.get("sim_fragment")
+    });
 
-    //4 create a target texture
+    renderer.domElement.addEventListener('mousemove', onMouseMove)
+    //5 the simulation:
+    //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
+    var geom = getSimulationGeom
+    scene.add(new THREE.Mesh(geom, simulationShader));
+
+    update();
+  }
+  
+  function getRenderTargets() {
     var options = {
       minFilter: THREE.NearestFilter,//important as we want to sample square pixels
       magFilter: THREE.NearestFilter,//
       format: THREE.RGBFormat,//could be RGBAFormat
-      type: THREE.FloatType//important as we need precise coordinates (not ints)
+      type:THREE.FloatType//important as we need precise coordinates (not ints)
     };
-    //rtt = new THREE.WebGLRenderTarget( width,height, options);
     
-    height_field = generatePositionTexture(WIDTH, HEIGHT);
+    var dtPosition = generatePositionTexture(WIDTH, HEIGHT);
+    return [1,2,3].map(function() {
+      
+    })
+  }
+  
+  function passThroughRenderPass() {
     
-    
-    var simulationShader = new THREE.ShaderMaterial({
-      uniforms: {
-        height_field: { type: "t", value: height_field }
-      },
-      vertexShader: ShaderLoader.get( "vertex" ),
-      fragmentShader:  ShaderLoader.get( "fragment" )
-    });
+  }
+  
+  //returns an array of random 3D coordinates
+  function generatePositionTexture(width, height) {
+		var arr = new Float32Array(width * height * 3);
+    var texture = new THREE.DataTexture(arr, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType);
+    texture.needsUpdate = true;		return texture;
 
-    renderer.domElement.addEventListener('mousemove', defineOnMouseMove(simulationShader))
-    //5 the simulation:
-    //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
+	}
+  
+  function getSimulationGeometry() {
+    //Might switch to just a PlaneBufferGeometry(width, height, widthSegments, heightSegments)
     var geom = new THREE.BufferGeometry();
     var vertices = new Float32Array([
       -1,-1,0, 1,-1,0,  1,1,0,
@@ -58,36 +94,19 @@ window.onload = function() {
     ])
     geom.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geom.addAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    scene.add(new THREE.Mesh(geom, simulationShader));
-
-    update();
+    return geom;
   }
-  //returns an array of random 3D coordinates
-  function generatePositionTexture(width, height) {
-		var a = new Float32Array( width * height * 3 );
-		for ( var k = 0, kl = a.length; k < kl; k += 3 ) {
-      // var temp = Math.random();
-      var temp = 0;
-			a[ k + 0 ] = temp;
-			a[ k + 1 ] = temp;
-			a[ k + 2 ] = temp;
-		}
-
-		var texture = new THREE.DataTexture( a, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType );
-		texture.needsUpdate = true;
-
-		return texture;
-
-	}
   
-  function defineOnMouseMove(shader) {
-    return function(event) {
-      var x = event.offsetX, 
-          y = event.offsetY;
-      
-      shader.uniforms.height_field.image.data[(x + WIDTH * y) * 3] = 1;
-      
-    };
+  function onMouseMove() {
+    mouse.x = (event.offsetX / WIDTH) * 2 - 1;
+    mouse.y = - (event.offsetY / HEIGHT) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, orthoCamera);
+    
+    var intersects = raycaster.intersectObjects(scene.children);
+    if (intersects.length > 0) {
+      intersect.copy(intersects[0].uv);
+    }
   }
   
   //update loop
