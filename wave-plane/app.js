@@ -59,8 +59,8 @@ window.onload = function() {
         position_old: { type: 't', value: rtPositionOld },
         position_cur: { type: 't', value: rtPositionCur },
         offset: { type: 'f', value: 1/WIDTH },
-        wave_speed: { type: 'f', value: "0.5" },
-        damping_strength: { type: 'f', value: '0.01' },
+        wave_speed: { type: 'f', value: 0.0 },
+        damping_strength: { type: 'f', value: 0.1 },
         dt: { type: 'f', value: '0.0016' },
         mouse: { type: "v2", value: intersect }
       },

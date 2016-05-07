@@ -16,7 +16,7 @@ float fd_central(float left, float center, float right) {
 float get_x_deriv(float center) {
   float left   = texture2D( position_cur, vUv + vec2(-offset, 0.)).r;
   float right  = texture2D( position_cur, vUv + vec2(offset, 0.)).r;
-  return fd_central(left, right, center);
+  return fd_central(left, center, right);
 }
 
 float get_y_deriv(float center) {
@@ -41,6 +41,6 @@ void main() {
   const float DRAW_RADIUS = 0.01;
   float new_position = get_next_timestep();
   float mouse_distance = length(mouse - vUv);
-  float color = max(sign(DRAW_RADIUS - mouse_distance), 0.0);
+  float color = max(sign(DRAW_RADIUS - mouse_distance), 0.0) * 0.1;
   gl_FragColor = vec4(min(1., new_position + color), 0., 0., 1.0);
 }
