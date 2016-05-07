@@ -1,8 +1,8 @@
-uniform vec2 resolution;
-uniform float time;
 uniform sampler2D texture;
+
+varying vec2 vUv;
+
 void main()	{
-	vec2 uv = gl_FragCoord.xy / resolution.xy;
-	vec3 color = texture2D( texture, uv ).xyz;
+	vec3 color = texture2D( texture, vUv ).xyz;
 	gl_FragColor = vec4( color, 1.0 );
 }

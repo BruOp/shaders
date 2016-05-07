@@ -1,6 +1,9 @@
-var scene, orthoCamera, camera, renderer, renderTargetTexture, height_field, mouse, rayCaster, intersect;
+var scene, orthoCamera, camera, renderer, renderTargetTexture,
+    passThruShader, simMesh, mouse, rayCaster, intersect;
 
-var WIDTH = 500, HEIGHT = 500;
+var rtPositionOld, rtPositionCur, rtPositionNew;
+
+var WIDTH = 512, HEIGHT = 512;
 window.onload = function() {
   var shaderLoader = new ShaderLoader();
   shaderLoader.loadShaders({
@@ -33,24 +36,39 @@ window.onload = function() {
     rttScene  = new THREE.Scene();
     orthoCamera = new THREE.OrthographicCamera(-1,1,1,-1,1/Math.pow( 2, 53 ),1 );
     
-    var [rtPositionOld, rtPositionCur, rtPositionNew] = getRenderTargets();
+    
+    
+    passThruShader = new THREE.ShaderMaterial({
+      uniforms: {
+    		texture: { type: "t", value: null }
+      },
+      vertexShader: ShaderLoader.get("passthrough_vertex"),
+      fragmentShader: ShaderLoader.get("passthrough_fragment"),
+    })
+
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
+    
+    //5 the simulation:
+    //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
+    var geom = getSimulationGeometry();
+    passThroughMesh = new THREE.Mesh(geom, passThruShader);
+    scene.add(passThroughMesh);
+
+    [rtPositionOld, rtPositionCur, rtPositionNew] = getRenderTargets();
     
     var simulationShader = new THREE.ShaderMaterial({
       uniforms: {
         position_old: { type: 't', value: rtPositionOld },
         position_cur: { type: 't', value: rtPositionCur },
-        position_new: { type: 't', value: rtPositionNew },
         mouse: { type: "v2", value: intersect }
       },
       vertexShader: ShaderLoader.get("sim_vertex"),
       fragmentShader:  ShaderLoader.get("sim_fragment")
     });
-
-    renderer.domElement.addEventListener('mousemove', onMouseMove)
-    //5 the simulation:
-    //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
-    var geom = getSimulationGeom
-    scene.add(new THREE.Mesh(geom, simulationShader));
+    
+    geom = getSimulationGeometry();
+    simMesh = new THREE.Mesh(geom, simulationShader);
+    rttScene.add(simMesh);
 
     update();
   }
@@ -65,20 +83,47 @@ window.onload = function() {
     
     var dtPosition = generatePositionTexture(WIDTH, HEIGHT);
     return [1,2,3].map(function() {
-      
+      rtt = getRenderTarget()
+      passThroughRender(dtPosition, rtt);
+      return rtt;
     })
   }
   
-  function passThroughRenderPass() {
-    
+  function passThroughRender(input, output) {
+    passThroughMesh.material = passThruShader;
+		passThroughMesh.material.uniforms.texture.value = input;
+    if (!output) {
+      renderer.render(scene, orthoCamera);
+    } else {
+      renderer.render(scene, orthoCamera, output);
+    }
   }
   
   //returns an array of random 3D coordinates
   function generatePositionTexture(width, height) {
 		var arr = new Float32Array(width * height * 3);
+    // for (var i = 0; i < arr.length - 1; i += 3) {
+    //   arr[i] = Math.random();
+    //   arr[i+1] = Math.random();
+    //   arr[i+2] = Math.random();
+    // }
     var texture = new THREE.DataTexture(arr, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType);
-    texture.needsUpdate = true;		return texture;
-
+    
+    texture.needsUpdate = true;
+    return texture;
+	}
+  
+  function getRenderTarget() {
+		var renderTarget = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, {
+			wrapS: THREE.RepeatWrapping,
+			wrapT: THREE.RepeatWrapping,
+			minFilter: THREE.NearestFilter,
+			magFilter: THREE.NearestFilter,
+			format: THREE.RGBFormat,
+			type: THREE.FloatType,
+			stencilBuffer: false
+		});
+		return renderTarget;
 	}
   
   function getSimulationGeometry() {
@@ -115,6 +160,8 @@ window.onload = function() {
       requestAnimationFrame(update);
       
       //render the particles at the new location
-      renderer.render( scene, orthoCamera );
+      renderer.render( rttScene, orthoCamera, rtPositionNew);
+      passThroughRender( rtPositionNew, rtPositionCur );
+      passThroughRender( rtPositionCur );
   }
 };
