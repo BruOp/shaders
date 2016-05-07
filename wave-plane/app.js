@@ -35,9 +35,7 @@ window.onload = function() {
     
     rttScene  = new THREE.Scene();
     orthoCamera = new THREE.OrthographicCamera(-1,1,1,-1,1/Math.pow( 2, 53 ),1 );
-    
-    
-    
+
     passThruShader = new THREE.ShaderMaterial({
       uniforms: {
     		texture: { type: "t", value: null }
@@ -60,6 +58,10 @@ window.onload = function() {
       uniforms: {
         position_old: { type: 't', value: rtPositionOld },
         position_cur: { type: 't', value: rtPositionCur },
+        offset: { type: 'f', value: 1/WIDTH },
+        wave_speed: { type: 'f', value: "0.5" },
+        damping_strength: { type: 'f', value: '0.01' },
+        dt: { type: 'f', value: '0.0016' },
         mouse: { type: "v2", value: intersect }
       },
       vertexShader: ShaderLoader.get("sim_vertex"),
@@ -161,6 +163,7 @@ window.onload = function() {
       
       //render the particles at the new location
       renderer.render( rttScene, orthoCamera, rtPositionNew);
+      passThroughRender( rtPositionCur, rtPositionOld );
       passThroughRender( rtPositionNew, rtPositionCur );
       passThroughRender( rtPositionCur );
   }
