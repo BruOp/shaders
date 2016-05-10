@@ -1,22 +1,28 @@
 var scene, orthoCamera, camera, renderer, renderTargetTexture,
     passThruShader, simMesh, mouse, rayCaster, intersect;
-
+var uvTexture;
 var rtPositionOld, rtPositionCur, rtPositionNew;
+var mouseIsClicked = 1.0;
 
 var WIDTH = 512, HEIGHT = 512;
 window.onload = function() {
   var shaderLoader = new ShaderLoader();
-  shaderLoader.loadShaders({
-    passthrough_vertex: "/passthrough/vertex",
-    passthrough_fragment: "/passthrough/fragment",
-    sim_vertex: "/simulation/vertex",
-    sim_fragment : "/simulation/fragment",
-  }, "./shaders", start );
+  
+  new THREE.TextureLoader().load('/images/UV_GRID_Sm.jpg',
+    function(texture) {
+      texture.flipY = false;
+      uvTexture = texture;
+      shaderLoader.loadShaders({
+        passthrough_vertex: "/passthrough/vertex",
+        passthrough_fragment: "/passthrough/fragment",
+        sim_vertex: "/simulation/vertex",
+        sim_fragment : "/simulation/fragment",
+      }, "./shaders", start );
+    });
 
   function start() {
-    
     raycaster = new THREE.Raycaster();
-    intersect = new THREE.Vector2();
+    intersect = new THREE.Vector2(0.5, 0.5);
     mouse = new THREE.Vector2();
     
     renderer = new THREE.WebGLRenderer();
@@ -44,7 +50,7 @@ window.onload = function() {
       fragmentShader: ShaderLoader.get("passthrough_fragment"),
     })
 
-    renderer.domElement.addEventListener('mousemove', onMouseMove);
+    renderer.domElement.addEventListener('click', onMouseClick);
     
     //5 the simulation:
     //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
@@ -56,13 +62,15 @@ window.onload = function() {
     
     var simulationShader = new THREE.ShaderMaterial({
       uniforms: {
+        uv_texture: { type: 't', value: uvTexture },
         position_old: { type: 't', value: rtPositionOld },
         position_cur: { type: 't', value: rtPositionCur },
         offset: { type: 'f', value: 1/WIDTH },
-        wave_speed: { type: 'f', value: 0.0 },
-        damping_strength: { type: 'f', value: 0.1 },
+        wave_speed: { type: 'f', value: 0.0012 },
+        damping_strength: { type: 'f', value: 0.005 },
         dt: { type: 'f', value: '0.0016' },
-        mouse: { type: "v2", value: intersect }
+        mouse: { type: "v2", value: intersect },
+        mouse_is_clicked: { type: "f", value: mouseIsClicked }
       },
       vertexShader: ShaderLoader.get("sim_vertex"),
       fragmentShader:  ShaderLoader.get("sim_fragment")
@@ -76,12 +84,7 @@ window.onload = function() {
   }
   
   function getRenderTargets() {
-    var options = {
-      minFilter: THREE.NearestFilter,//important as we want to sample square pixels
-      magFilter: THREE.NearestFilter,//
-      format: THREE.RGBFormat,//could be RGBAFormat
-      type:THREE.FloatType//important as we need precise coordinates (not ints)
-    };
+    
     
     var dtPosition = generatePositionTexture(WIDTH, HEIGHT);
     return [1,2,3].map(function() {
@@ -104,12 +107,15 @@ window.onload = function() {
   //returns an array of random 3D coordinates
   function generatePositionTexture(width, height) {
 		var arr = new Float32Array(width * height * 3);
-    // for (var i = 0; i < arr.length - 1; i += 3) {
-    //   arr[i] = Math.random();
-    //   arr[i+1] = Math.random();
-    //   arr[i+2] = Math.random();
+    for (var i = 0; i < arr.length - 1; i += 3) {
+      arr[i] = 0.5;
+    }
+    // center = Math.floor(0.5 * HEIGHT * WIDTH * 3);
+    // for (var i = Math.floor(0.25 * WIDTH * 3); i < Math.floor(0.75 * WIDTH * 3); i += 3) {
+    //   arr[center+i] = 0.50001;
     // }
-    var texture = new THREE.DataTexture(arr, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType);
+    
+    var texture = new THREE.DataTexture(arr, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType, THREE.UVMapping);
     
     texture.needsUpdate = true;
     return texture;
@@ -117,8 +123,8 @@ window.onload = function() {
   
   function getRenderTarget() {
 		var renderTarget = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, {
-			wrapS: THREE.RepeatWrapping,
-			wrapT: THREE.RepeatWrapping,
+			wrapS: THREE.MirroredRepeatWrapping,
+			wrapT: THREE.MirroredRepeatWrapping,
 			minFilter: THREE.NearestFilter,
 			magFilter: THREE.NearestFilter,
 			format: THREE.RGBFormat,
@@ -130,21 +136,22 @@ window.onload = function() {
   
   function getSimulationGeometry() {
     //Might switch to just a PlaneBufferGeometry(width, height, widthSegments, heightSegments)
-    var geom = new THREE.BufferGeometry();
-    var vertices = new Float32Array([
-      -1,-1,0, 1,-1,0,  1,1,0,
-      -1,-1,0, 1, 1,0, -1,1,0
-    ]);
-    var uv = new Float32Array([
-      0,1, 1,1, 1,0,
-      0,1, 1,0, 0,0
-    ])
-    geom.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geom.addAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    return geom;
+    // var geom = new THREE.BufferGeometry();
+    // var vertices = new Float32Array([
+    //   -1,-1,0, 1,-1,0,  1,1,0,
+    //   -1,-1,0, 1, 1,0, -1,1,0
+    // ]);
+    // var uv = new Float32Array([
+    //   0,1, 1,1, 1,0,
+    //   0,1, 1,0, 0,0
+    // ])
+    // geom.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    // geom.addAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    // return geom;
+    return new THREE.PlaneBufferGeometry( 2, 2, 1, 1 );
   }
   
-  function onMouseMove() {
+  function onMouseClick() {
     mouse.x = (event.offsetX / WIDTH) * 2 - 1;
     mouse.y = - (event.offsetY / HEIGHT) * 2 + 1;
     
@@ -153,6 +160,7 @@ window.onload = function() {
     var intersects = raycaster.intersectObjects(scene.children);
     if (intersects.length > 0) {
       intersect.copy(intersects[0].uv);
+      simMesh.material.uniforms.mouse_is_clicked.value = 1.0;
     }
   }
   
@@ -166,5 +174,6 @@ window.onload = function() {
       passThroughRender( rtPositionCur, rtPositionOld );
       passThroughRender( rtPositionNew, rtPositionCur );
       passThroughRender( rtPositionCur );
+      simMesh.material.uniforms.mouse_is_clicked.value = 0;
   }
 };
