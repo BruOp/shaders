@@ -1,24 +1,19 @@
 var scene, orthoCamera, camera, renderer, renderTargetTexture,
-    passThruShader, simMesh, mouse, rayCaster, intersect;
-var uvTexture;
-var rtPositionOld, rtPositionCur, rtPositionNew;
-var mouseIsClicked = 1.0;
+    passThruShader, simMesh;
+    
+var mouse, rayCaster, intersect, mouseMagnitude = 0.0, mouseRadius = 0.02;
+
+var rtPositionCur, rtPositionNew;
 
 var WIDTH = 512, HEIGHT = 512;
 window.onload = function() {
   var shaderLoader = new ShaderLoader();
-  
-  new THREE.TextureLoader().load('/images/UV_GRID_Sm.jpg',
-    function(texture) {
-      texture.flipY = false;
-      uvTexture = texture;
-      shaderLoader.loadShaders({
-        passthrough_vertex: "/passthrough/vertex",
-        passthrough_fragment: "/passthrough/fragment",
-        sim_vertex: "/simulation/vertex",
-        sim_fragment : "/simulation/fragment",
-      }, "./shaders", start );
-    });
+  shaderLoader.loadShaders({
+    passthrough_vertex: "/passthrough/vertex",
+    passthrough_fragment: "/passthrough/fragment",
+    sim_vertex: "/simulation/vertex",
+    sim_fragment : "/simulation/fragment",
+  }, "./shaders", start );
 
   function start() {
     raycaster = new THREE.Raycaster();
@@ -58,19 +53,16 @@ window.onload = function() {
     passThroughMesh = new THREE.Mesh(geom, passThruShader);
     scene.add(passThroughMesh);
 
-    [rtPositionOld, rtPositionCur, rtPositionNew] = getRenderTargets();
-    
+    [rtPositionCur, rtPositionNew] = getRenderTargets();
     var simulationShader = new THREE.ShaderMaterial({
       uniforms: {
-        uv_texture: { type: 't', value: uvTexture },
-        position_old: { type: 't', value: rtPositionOld },
-        position_cur: { type: 't', value: rtPositionCur },
+        position_texture: { type: 't', value: rtPositionCur },
+        mouse: { type: "v2", value: intersect },
         offset: { type: 'f', value: 1/WIDTH },
         wave_speed: { type: 'f', value: 0.0012 },
         damping_strength: { type: 'f', value: 0.005 },
-        dt: { type: 'f', value: '0.0016' },
-        mouse: { type: "v2", value: intersect },
-        mouse_is_clicked: { type: "f", value: mouseIsClicked }
+        mouse_magnitude: { type: "f", value: mouseMagnitude },
+        draw_radius: { type: "f", value: mouseRadius }
       },
       vertexShader: ShaderLoader.get("sim_vertex"),
       fragmentShader:  ShaderLoader.get("sim_fragment")
@@ -84,10 +76,8 @@ window.onload = function() {
   }
   
   function getRenderTargets() {
-    
-    
     var dtPosition = generatePositionTexture(WIDTH, HEIGHT);
-    return [1,2,3].map(function() {
+    return [1,2].map(function() {
       rtt = getRenderTarget()
       passThroughRender(dtPosition, rtt);
       return rtt;
@@ -109,11 +99,11 @@ window.onload = function() {
 		var arr = new Float32Array(width * height * 3);
     for (var i = 0; i < arr.length - 1; i += 3) {
       arr[i] = 0.5;
+      arr[i+1] = 0.5;
+      arr[i+2] = 0.5;
     }
-    // center = Math.floor(0.5 * HEIGHT * WIDTH * 3);
-    // for (var i = Math.floor(0.25 * WIDTH * 3); i < Math.floor(0.75 * WIDTH * 3); i += 3) {
-    //   arr[center+i] = 0.50001;
-    // }
+    center = Math.floor(0.5 * HEIGHT * WIDTH * 3) + Math.floor(0.5 * WIDTH * 3);
+    arr[center] = 0.50001;
     
     var texture = new THREE.DataTexture(arr, WIDTH, HEIGHT, THREE.RGBFormat, THREE.FloatType, THREE.UVMapping);
     
@@ -135,19 +125,6 @@ window.onload = function() {
 	}
   
   function getSimulationGeometry() {
-    //Might switch to just a PlaneBufferGeometry(width, height, widthSegments, heightSegments)
-    // var geom = new THREE.BufferGeometry();
-    // var vertices = new Float32Array([
-    //   -1,-1,0, 1,-1,0,  1,1,0,
-    //   -1,-1,0, 1, 1,0, -1,1,0
-    // ]);
-    // var uv = new Float32Array([
-    //   0,1, 1,1, 1,0,
-    //   0,1, 1,0, 0,0
-    // ])
-    // geom.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    // geom.addAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    // return geom;
     return new THREE.PlaneBufferGeometry( 2, 2, 1, 1 );
   }
   
@@ -160,7 +137,7 @@ window.onload = function() {
     var intersects = raycaster.intersectObjects(scene.children);
     if (intersects.length > 0) {
       intersect.copy(intersects[0].uv);
-      simMesh.material.uniforms.mouse_is_clicked.value = 1.0;
+      simMesh.material.uniforms.mouse_magnitude.value = 1.0;
     }
   }
   
@@ -171,9 +148,9 @@ window.onload = function() {
       
       //render the particles at the new location
       renderer.render( rttScene, orthoCamera, rtPositionNew);
-      passThroughRender( rtPositionCur, rtPositionOld );
-      passThroughRender( rtPositionNew, rtPositionCur );
+      passThroughRender( rtPositionNew, rtPositionCur);
       passThroughRender( rtPositionCur );
-      simMesh.material.uniforms.mouse_is_clicked.value = 0;
+      
+      simMesh.material.uniforms.mouse_magnitude.value = 0;
   }
 };
