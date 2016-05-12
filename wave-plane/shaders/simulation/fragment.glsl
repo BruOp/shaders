@@ -19,14 +19,22 @@ float fd_central(in float left, in float center, in float right) {
 }
 
 float get_x_deriv(in float center) {
-  float left   = get_texture_values(vUv - vec2(offset, 0.)).r;
-  float right  = get_texture_values(vUv + vec2(offset, 0.)).r;
+  vec2 left_uv  = vUv - vec2(offset, 0.);
+  vec2 right_uv = vUv + vec2(offset, 0.);
+  float sign_left  = sign(left_uv.x);
+  float sign_right = sign(1. - right_uv.x);
+  float left   = clamp(-sign_left, 0., 1.) + sign_left * get_texture_values(left_uv).r;
+  float right  = clamp(-sign_right, 0., 1.) + sign_right * get_texture_values(right_uv).r;
   return fd_central(left, center, right);
 }
 
 float get_y_deriv(in float center) {
-  float top    = get_texture_values(vUv - vec2(0., offset)).r;
-  float bottom = get_texture_values(vUv + vec2(0., offset)).r;
+  vec2 top_uv    = vUv + vec2(0., offset);
+  vec2 bottom_uv = vUv - vec2(0., offset);
+  float sign_top = sign(1. - top_uv.y);
+  float sign_bot = sign(bottom_uv.y);
+  float top    = clamp(-sign_top, 0., 1.) + sign_top * get_texture_values(top_uv).r;
+  float bottom = clamp(-sign_bot, 0., 1.) + sign_bot * get_texture_values(bottom_uv).r;
   return fd_central(bottom, center, top);
 }
 
@@ -48,7 +56,7 @@ void main() {
   float new_position = get_next_position();
   
   float mouse_distance = length(mouse - vUv);
-  float color = mouse_magnitude * 0.01 * max(sign(draw_radius - mouse_distance), 0.0);
+  float color = mouse_magnitude * 0.001 * max(sign(draw_radius - mouse_distance), 0.0);
   float final_value = clamp(new_position + color, 0., 1.);
   gl_FragColor = vec4(final_value, cur_position, 0.0, 1.0);
 }
